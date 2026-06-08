@@ -1,0 +1,8 @@
+POST http://127.0.0.1:5000/process
+Content-Type: application/json
+
+{
+  "I": [1,2,3,4],
+  "Q": [2,3,4,5]
+}
+

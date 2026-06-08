@@ -1,0 +1,142 @@
+import React, { useState, useEffect } from "react";
+import Plot from "react-plotly.js";
+
+function SpectralPlotter() {
+  const [file, setFile] = useState(null);
+  const [spectra, setSpectra] = useState([]);
+  const [frequency, setFrequency] = useState([]);
+  const [frameskip, setFrameskip] = useState(0);
+
+  // Handle file upload
+  async function handleFileUpload(e) {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) {
+      alert("Please select a .d11 file");
+      return;
+    }
+    setFile(selectedFile);
+  }
+
+  // Parse  file
+  async function parseFile(file, frameskip) {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const dataView = new DataView(arrayBuffer);
+
+      let A = [];
+      for (let i = 0; i < 64; i++) {
+        A.push(dataView.getInt16(i * 2, true));
+      }
+
+      let nrgb = A[2];
+      let nfft = A[3];
+      let nci = A[4];
+      let ipp = A[6];
+      const fs = 1e6 / (ipp * nci);
+
+      const freq = Array.from({ length: nfft }, (_, i) => -fs / 2 + (i * fs) / nfft);
+      setFrequency(freq);
+
+      const datasize = nrgb * nfft;
+      const frameSizeBytes = 128 + datasize * 4;
+      let startOffset = frameSizeBytes * frameskip + 128;
+
+      let spectraData = [];
+      for (let rgb = 0; rgb < nrgb; rgb++) {
+        let row = [];
+        for (let ft = 0; ft < nfft; ft++) {
+          const val = dataView.getFloat32(startOffset, true);
+          startOffset += 4;
+          row.push(val);
+        }
+
+        const maxVal = Math.max(...row.map(Math.abs));
+        row = row.map((v) =>( v / maxVal) / 5);
+
+        const mean = row.reduce((a, b) => a + b, 0) / row.length;
+        row = row.map((v) => v - mean);
+
+        spectraData.push(row);
+      }
+
+      // FFT shift
+      spectraData = spectraData.map((row) => {
+        const half = Math.floor(row.length / 2);
+        return row.slice(half).concat(row.slice(0, half));
+      });
+
+      setSpectra(spectraData);
+    } catch (err) {
+      console.error("Error parsing file:", err);
+    }
+  }
+
+  useEffect(() => {
+    if (file) {
+      parseFile(file, frameskip);
+    }
+  }, [file, frameskip]);
+
+  return (
+    <div
+      style={{
+        backgroundColor: "black",
+        color: "white",
+        minHeight: "100vh",
+        padding: "20px",
+      }}
+    >
+      <h1 style={{ color: "cyan" }}>Spectral Data Viewer</h1>
+
+      {/* File Upload */}
+      <input type="file"  onChange={handleFileUpload} />
+
+      {/* Frame Skip Input */}
+      <div style={{ marginTop: "10px" }}>
+        <label>Frame Skip: </label>
+        <input
+          type="number"
+          value={frameskip}
+          onChange={(e) => setFrameskip(Number(e.target.value))}
+          style={{ marginLeft: "10px" }}
+        />
+      </div>
+
+      
+      {/* Plot */}
+      <Plot
+        data={
+          spectra.length > 0
+            ? spectra.map((row, i) => ({
+                x: frequency,
+                y: row.map(v => Math.abs(v) + 0.15 * i),
+                type: 'scatter',
+                mode: 'lines',
+                line: {color: 'green'},
+                hoverinfo: 'skip'
+              }))
+            : []
+        }
+        layout={{
+          title: { text: "Spectra", font: { color: "white" } }, 
+          plot_bgcolor: "black", 
+          paper_bgcolor: "black",
+          font: { color: "white" }, 
+          xaxis: {
+            title: { text: "Frequency (Hz)", font: { color: "white" } },
+            range: [-4, 4]
+          },
+          yaxis: {
+            title: { text: "Amplitude", font: { color: "white" } }, 
+          },
+          showlegend: false, 
+          height: 1000      
+        }}
+
+        style={{ marginTop: "20px" }}
+      />
+    </div>
+  );
+}
+
+export default SpectralPlotter;
