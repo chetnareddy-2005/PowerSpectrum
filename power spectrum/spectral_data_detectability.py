@@ -162,4 +162,4 @@ def process_files(filenameRef, filename):
     fig2.savefig(os.path.join(out_dir,"graph2.png"))
     fig3.savefig(os.path.join(out_dir,"graph3.png"))
 
-    return {1: fig1, 2: fig2, 3: fig3}
+    return {0: fig1, 1: fig2, 2: fig3}
