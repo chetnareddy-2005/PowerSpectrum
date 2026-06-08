@@ -1,10 +1,13 @@
 import os
 import io
-from flask import Flask, request, Response, send_from_directory, render_template
+import numpy as np
+from flask import Flask, request, Response, send_from_directory, render_template, jsonify
+from flask_cors import CORS
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from spectral_data_detectability import process_files
 
 app = Flask(__name__)
+CORS(app)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -83,6 +86,37 @@ def download(filename):
         UPLOAD_FOLDER,
         filename
     )
+
+
+# FFT Plotter endpoint
+
+@app.route("/process", methods=["POST"])
+def process_fft():
+    try:
+        data = request.get_json()
+        I = np.array(data.get("I", []))
+        Q = np.array(data.get("Q", []))
+
+        if len(I) == 0 or len(Q) == 0:
+            return jsonify({"error": "I and Q values required"}), 400
+
+        # Create complex signal
+        signal = I + 1j * Q
+
+        # Compute FFT
+        fft_result = np.fft.fft(signal)
+        magnitude = np.abs(fft_result)
+
+        # Frequency axis (normalized)
+        freq = np.fft.fftfreq(len(signal))
+
+        return jsonify({
+            "x": freq.tolist(),
+            "y": magnitude.tolist()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True)
